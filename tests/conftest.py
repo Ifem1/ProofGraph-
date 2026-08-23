@@ -2,8 +2,8 @@
 
 genlayer-test 0.29.2 replaces fd 0 with a temporary file and immediately
 unlinks it. Windows refuses that unlink while fd 0 still owns the handle.
-The shim is scoped to the test runner's loader module and only suppresses that
-specific WinError 32; contract execution is unchanged.
+The shim is active only for the pytest process and suppresses that specific
+WinError 32 during runner cleanup; contract execution is unchanged.
 """
 
 import os
