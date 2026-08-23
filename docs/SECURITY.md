@@ -1,0 +1,7 @@
+# Security notes
+
+ProofGraph protects the integrity of dependency-gated conclusions, not external assets or the truth of arbitrary internet claims.
+
+Caller-supplied statements, rules, evidence, and context are bounded but untrusted. The adjudication prompt labels them as input data and requires the model to treat embedded instructions as evidence, not authority. Structured output is strictly type-, range-, and consistency-checked; malformed or ambiguous output never becomes `VALID`.
+
+Leader results are not trusted: validators independently adjudicate the same canonical input. A malicious validator majority remains outside this contract's protection. Downstream consumers must use `is_valid`/`can_consume` and must treat `PENDING`, `INVALID`, and `NEEDS_REVALIDATION` as unsafe. No privileged bypass exists. Network authenticity, source provenance, and domain-specific evidence quality remain application responsibilities.

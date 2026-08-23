@@ -123,6 +123,10 @@ tests/direct/                direct-mode contract and validator tests
 examples/consumer.py         composition example
 docs/DESIGN.md               invariants, threat model, consensus design
 docs/TEST_PLAN.md            lifecycle and consensus test matrix
+docs/CONSENSUS.md            reviewer-facing consensus specification
+docs/SECURITY.md             threat model and fail-closed rules
+docs/INTEGRATION.md          stable downstream-consumer interface
+docs/DEPLOYMENT.md           verified deployment evidence (when available)
 requirements.txt             development dependencies
 gltest.config.yaml           GenLayer test configuration
 ```
@@ -138,6 +142,8 @@ pytest tests/direct -v
 ```
 
 Direct-mode tests use GenLayer's `genlayer-test` fixtures and mock LLM outputs so the leader and validator paths can be tested independently.
+
+On Windows, `genlayer-test==0.29.2` currently fails during fixture setup because its temporary stdin file remains open when it attempts to unlink it (`PermissionError: [WinError 32]`). This is an environment/tooling failure observed in this audit, not a contract pass. Run the suite in the supported GenLayer environment after installing the pinned dependencies.
 
 ## Submission fit
 

@@ -104,3 +104,7 @@ pytest tests/direct -v
 ```
 
 The direct test suite covers graph creation, dependency failures, positive/negative/indeterminate semantic outcomes, stale propagation, revision-gated consumption, and validator agreement/disagreement behavior.
+
+## Evidence status
+
+The contract passes GenVM linter 0.10.0 and SDK validation. Direct-mode execution was attempted with genlayer-test 0.29.2 but is blocked on Windows by the runner's temporary-stdin unlink error (`WinError 32`); no test pass is claimed from that run. No canonical Studionet address or runtime transaction evidence is present yet; see `docs/DEPLOYMENT.md`.
