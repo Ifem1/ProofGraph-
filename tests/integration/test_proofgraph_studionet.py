@@ -14,6 +14,8 @@ from pathlib import Path
 
 import pytest
 from gltest import get_contract_factory, get_default_account
+from gltest.types import TransactionStatus
+from gltest.utils import extract_contract_address
 
 
 pytestmark = pytest.mark.skipif(
@@ -40,7 +42,14 @@ def _receipt(label, receipt):
 def test_live_proofgraph_lifecycle():
     factory = get_contract_factory(contract_file_path=ROOT)
     account = get_default_account()
-    contract = factory.deploy(account=account)
+    deployment_receipt = factory.deploy_contract_tx(
+        account=account,
+        wait_transaction_status=TransactionStatus.ACCEPTED,
+    )
+    _receipt("DEPLOY", deployment_receipt)
+    contract = factory.build_contract(
+        extract_contract_address(deployment_receipt), account=account
+    )
     print("DEPLOYED_ADDRESS=" + str(contract.address))
 
     _receipt(
