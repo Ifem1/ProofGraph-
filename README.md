@@ -2,7 +2,7 @@
 
 **A reusable GenLayer Intelligent Contract primitive for dependency-aware semantic attestations.**
 
-ProofGraph lets builders represent conclusions as nodes in a directed acyclic proof graph. Each node may depend on previously created nodes. GenLayer validators independently judge whether the accepted parent conclusions, the node's rule, and its bounded evidence materially support the proposed child conclusion. Deterministic contract logic then records the accepted status and invalidates direct dependents when an upstream proof stops being valid.
+ProofGraph lets builders represent conclusions as nodes in a directed acyclic proof graph. Each node may depend on previously created nodes. GenLayer validators independently judge whether the accepted parent conclusions, the node's rule, and its bounded evidence materially support the proposed child conclusion. Deterministic revision bindings and a bounded validity epoch make stale descendants non-consumable immediately, without recursively rewriting the whole graph.
 
 ProofGraph is intentionally a **standalone Intelligent Contract**. It has no frontend and does not need one: other contracts, scripts, or GenLayer Studio can consume it directly.
 
@@ -24,7 +24,7 @@ If `B` later becomes invalid, `D` should no longer be silently treated as safe. 
 
 ProofGraph separates responsibilities deliberately:
 
-- **Deterministic layer:** node IDs, DAG construction, dependency existence, bounded fan-in/fan-out, state transitions, revision counters, stale propagation, and read interfaces.
+- **Deterministic layer:** node IDs, DAG construction, dependency existence, bounded fan-in/fan-out, state transitions, revision counters, parent revision bindings, validity epochs, stale propagation, and read interfaces.
 - **Non-deterministic layer:** semantic entailment. A leader LLM evaluates whether the parent conclusions + rule + evidence support the proposed node.
 - **Validator layer:** validators independently rerun the same semantic task and compare only stable decision fields. Free-form reasoning is never used as an equivalence key.
 
@@ -88,7 +88,7 @@ create_node(node_id, statement, rule, dependencies_json, evidence)
 resolve_node(node_id, context)
 ```
 
-`dependencies_json` must be a JSON array of unique node IDs. `context` is optional bounded revalidation context supplied to every validator for that resolution.
+`dependencies_json` must be a JSON array of unique node IDs. `context` is optional bounded audit metadata for that resolution; it is not part of the semantic adjudication input.
 
 ### Views
 
@@ -102,6 +102,8 @@ get_graph_stats() -> str
 ```
 
 `can_consume` is designed for contract composition: consumers can require both a valid semantic conclusion and a minimum adjudication revision.
+
+Each node record also exposes `spec_hash`, `resolved_parent_revisions`, `resolved_epoch`, and `adjudication_input_hash`. The immutable statement/rule/dependency/evidence specification is hashed. A node is consumable only when its direct parent revisions and bounded validity epoch still match.
 
 ## Example composition
 

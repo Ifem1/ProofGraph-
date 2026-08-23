@@ -21,6 +21,9 @@ The direct suite covers both deterministic graph mechanics and GenLayer consensu
 | Consumption | minimum revision not met | `can_consume == false` |
 | Validator equivalence | same semantic fields, different reason | agree |
 | Validator equivalence | different verdict/blocker | disagree |
+| Transitive validity | A -> B -> C, revise A | B/C immediately non-consumable; re-resolution recovers |
+| Provenance | context changes | spec/input hashes remain stable |
+| Output safety | malformed/inconsistent object | fail closed before state mutation |
 
 ## Additional adversarial cases for Studio/Testnet
 
@@ -47,5 +50,7 @@ Reviewers/builders should be able to rely on these invariants:
 - `VALID` can only be written after all parents are `VALID` and semantic consensus returns `SUPPORTED`;
 - `INDETERMINATE` is never consumable as valid;
 - a direct child of a formerly valid node is not left `VALID` when that parent loses validity;
+- any stale descendant fails `is_valid` and `can_consume` without recursive writes;
+- parent revision bindings and the immutable `spec_hash` identify the exact adjudication basis;
 - nondeterministic functions never write persistent state;
 - free-form explanation text cannot cause validators to disagree when all material decision fields agree.

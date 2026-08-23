@@ -2,6 +2,7 @@
 
 from genlayer import *
 import json
+import hashlib
 
 
 class ProofGraph(gl.Contract):
@@ -10,9 +11,24 @@ class ProofGraph(gl.Contract):
     nodes: TreeMap[str, str]
     dependents: TreeMap[str, str]
     node_count: u64
+    validity_epoch: u64
 
     def __init__(self):
         self.node_count = u64(0)
+        self.validity_epoch = u64(0)
+
+    def _spec_hash(self, node: dict) -> str:
+        specification = json.dumps(
+            {
+                "statement": node["statement"],
+                "rule": node["rule"],
+                "dependencies": node["dependencies"],
+                "evidence": node["evidence"],
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        return hashlib.sha256(specification.encode()).hexdigest()
 
     def _load_node(self, node_id: str) -> dict:
         raw = self.nodes.get(node_id, "")
@@ -122,8 +138,13 @@ class ProofGraph(gl.Contract):
             "blocker_class": "NONE",
             "reason": "Awaiting GenLayer consensus.",
             "revision": 0,
+            "resolved_epoch": 0,
+            "resolved_parent_revisions": {},
+            "spec_hash": "",
+            "adjudication_input_hash": "",
             "last_context": "",
         }
+        node["spec_hash"] = self._spec_hash(node)
         self._store_node(node_id, node)
         self.dependents[node_id] = "[]"
         self.node_count = u64(self.node_count + 1)
@@ -134,8 +155,14 @@ class ProofGraph(gl.Contract):
             raise gl.vm.UserError("CONTEXT_TOO_LARGE")
 
         node = self._load_node(node_id)
+        previous_status = node["status"]
+        previous_effective_valid = self._is_effectively_valid(node)
+        if previous_effective_valid:
+            self.validity_epoch = u64(self.validity_epoch + 1)
+        current_epoch = int(self.validity_epoch)
         dependencies = node["dependencies"]
         parent_summaries: list[dict] = []
+        parent_revisions: dict[str, int] = {}
         invalid_parent = ""
 
         for dependency in dependencies:
@@ -149,12 +176,14 @@ class ProofGraph(gl.Contract):
                     "revision": parent["revision"],
                 }
             )
-            if parent["status"] != "VALID" and invalid_parent == "":
+            parent_revisions[dependency] = int(parent["revision"])
+            if not self._is_effectively_valid(parent) and invalid_parent == "":
                 invalid_parent = dependency
 
-        previous_status = node["status"]
         node["revision"] = int(node["revision"]) + 1
         node["last_context"] = context.strip()
+        node["resolved_epoch"] = 0
+        node["resolved_parent_revisions"] = parent_revisions
 
         # A derived conclusion cannot be valid while one of its declared premises is not.
         # This is deterministic and does not need an LLM vote.
@@ -169,13 +198,14 @@ class ProofGraph(gl.Contract):
                 self._mark_direct_dependents_stale(node_id)
             return
 
+        # Context is deliberately audit metadata, not part of the semantic
+        # basis. A permissionless caller cannot change what this node means.
         adjudication_input = json.dumps(
             {
                 "statement": node["statement"],
                 "rule": node["rule"],
                 "parents": parent_summaries,
                 "evidence": node["evidence"],
-                "context": context.strip(),
             },
             sort_keys=True,
             separators=(",", ":"),
@@ -256,6 +286,12 @@ INPUT:
 
         result = gl.vm.run_nondet_unsafe(evaluate, validator_fn)
 
+        node["adjudication_input_hash"] = hashlib.sha256(
+            adjudication_input.encode()
+        ).hexdigest()
+        node["spec_hash"] = self._spec_hash(node)
+        node["resolved_epoch"] = current_epoch
+
         node["verdict"] = result["verdict"]
         node["rule_satisfied"] = result["rule_satisfied"]
         node["blocker_class"] = result["blocker_class"]
@@ -279,6 +315,27 @@ INPUT:
             raise gl.vm.UserError("NODE_NOT_FOUND")
         return raw
 
+    def _is_effectively_valid(self, node: dict) -> bool:
+        if node["status"] != "VALID":
+            return False
+        if int(node.get("resolved_epoch", 0)) != int(self.validity_epoch):
+            return False
+        for dependency in node["dependencies"]:
+            parent_raw = self.nodes.get(dependency, "")
+            if parent_raw == "":
+                return False
+            parent = json.loads(parent_raw)
+            if not self._is_directly_bound(parent, int(node["resolved_parent_revisions"].get(dependency, -1))):
+                return False
+        return True
+
+    def _is_directly_bound(self, parent: dict, expected_revision: int) -> bool:
+        return (
+            parent["status"] == "VALID"
+            and int(parent["revision"]) == expected_revision
+            and int(parent.get("resolved_epoch", 0)) == int(self.validity_epoch)
+        )
+
     @gl.public.view
     def get_dependents(self, node_id: str) -> str:
         if self.nodes.get(node_id, "") == "":
@@ -290,7 +347,7 @@ INPUT:
         raw = self.nodes.get(node_id, "")
         if raw == "":
             return False
-        return json.loads(raw)["status"] == "VALID"
+        return self._is_effectively_valid(json.loads(raw))
 
     @gl.public.view
     def can_consume(self, node_id: str, minimum_revision: u64) -> bool:
@@ -298,7 +355,7 @@ INPUT:
         if raw == "":
             return False
         node = json.loads(raw)
-        return node["status"] == "VALID" and int(node["revision"]) >= int(minimum_revision)
+        return self._is_effectively_valid(node) and int(node["revision"]) >= int(minimum_revision)
 
     @gl.public.view
     def get_status(self, node_id: str) -> str:
@@ -309,4 +366,7 @@ INPUT:
 
     @gl.public.view
     def get_graph_stats(self) -> str:
-        return json.dumps({"node_count": int(self.node_count)}, separators=(",", ":"))
+        return json.dumps(
+            {"node_count": int(self.node_count), "validity_epoch": int(self.validity_epoch)},
+            separators=(",", ":"),
+        )

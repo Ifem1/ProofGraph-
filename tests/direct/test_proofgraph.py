@@ -89,6 +89,18 @@ def test_duplicate_dependency_reverts(direct_vm, direct_deploy):
         )
 
 
+def test_self_dependency_reverts(direct_vm, direct_deploy):
+    contract = direct_deploy("contracts/ProofGraph.py")
+    with direct_vm.expect_revert("SELF_DEPENDENCY"):
+        contract.create_node(
+            "A",
+            "A node cannot depend on itself.",
+            "The graph must remain acyclic.",
+            '["A"]',
+            "Structural invariant.",
+        )
+
+
 def test_supported_root_becomes_valid(direct_vm, direct_deploy):
     contract = direct_deploy("contracts/ProofGraph.py")
     create_root(contract)
@@ -192,6 +204,55 @@ def test_upstream_failure_marks_direct_child_stale(direct_vm, direct_deploy):
     assert contract.is_valid("B") is False
 
 
+def test_transitive_stale_reads_and_recovery(direct_vm, direct_deploy):
+    contract = direct_deploy("contracts/ProofGraph.py")
+    create_root(contract, "A")
+    contract.create_node("B", "B is supported.", "A must support B.", '["A"]', "B evidence.")
+    contract.create_node("C", "C is supported.", "B must support C.", '["B"]', "C evidence.")
+
+    direct_vm.mock_llm(r".*dependency-aware proof graph.*", supported())
+    contract.resolve_node("A", "")
+    contract.resolve_node("B", "")
+    contract.resolve_node("C", "")
+    assert contract.is_valid("C") is True
+
+    direct_vm.clear_mocks()
+    direct_vm.mock_llm(r".*dependency-aware proof graph.*", not_supported("EVIDENCE"))
+    contract.resolve_node("A", "contradictory update")
+
+    # No intermediate repair is needed for reads to fail closed.
+    assert contract.is_valid("B") is False
+    assert contract.is_valid("C") is False
+    assert contract.can_consume("B", 1) is False
+    assert contract.can_consume("C", 1) is False
+
+    direct_vm.clear_mocks()
+    direct_vm.mock_llm(r".*dependency-aware proof graph.*", supported())
+    contract.resolve_node("A", "recovered evidence")
+    contract.resolve_node("B", "")
+    contract.resolve_node("C", "")
+    assert contract.is_valid("C") is True
+
+
+def test_revision_binding_and_context_not_semantic_input(direct_vm, direct_deploy):
+    contract = direct_deploy("contracts/ProofGraph.py")
+    create_root(contract)
+    direct_vm.mock_llm(r".*dependency-aware proof graph.*", supported("first"))
+    contract.resolve_node("A", "caller supplied context one")
+    first = json.loads(contract.get_node("A"))
+    assert first["spec_hash"] != ""
+    assert first["adjudication_input_hash"] != ""
+    assert first["resolved_epoch"] == 0
+
+    direct_vm.clear_mocks()
+    direct_vm.mock_llm(r".*dependency-aware proof graph.*", supported("second"))
+    contract.resolve_node("A", "different caller supplied context")
+    second = json.loads(contract.get_node("A"))
+    assert second["spec_hash"] == first["spec_hash"]
+    assert second["adjudication_input_hash"] == first["adjudication_input_hash"]
+    assert second["revision"] == 2
+
+
 def test_validator_compares_semantic_decision_fields(direct_vm, direct_deploy):
     contract = direct_deploy("contracts/ProofGraph.py")
     create_root(contract)
@@ -215,3 +276,47 @@ def test_validator_rejects_material_decision_disagreement(direct_vm, direct_depl
     direct_vm.clear_mocks()
     direct_vm.mock_llm(r".*dependency-aware proof graph.*", not_supported("RULE"))
     assert direct_vm.run_validator() is False
+
+
+def test_malformed_model_output_fails_closed(direct_vm, direct_deploy):
+    contract = direct_deploy("contracts/ProofGraph.py")
+    create_root(contract)
+    direct_vm.mock_llm(r".*dependency-aware proof graph.*", "not-json")
+    with direct_vm.expect_revert("LLM_NON_OBJECT"):
+        contract.resolve_node("A", "")
+    assert json.loads(contract.get_node("A"))["status"] == "PENDING"
+
+
+def test_inconsistent_supported_model_output_fails_closed(direct_vm, direct_deploy):
+    contract = direct_deploy("contracts/ProofGraph.py")
+    create_root(contract)
+    direct_vm.mock_llm(
+        r".*dependency-aware proof graph.*",
+        json.dumps(
+            {
+                "verdict": "SUPPORTED",
+                "rule_satisfied": False,
+                "blocker_class": "NONE",
+                "reason": "inconsistent",
+            }
+        ),
+    )
+    with direct_vm.expect_revert("LLM_INCONSISTENT_SUPPORTED"):
+        contract.resolve_node("A", "")
+    assert json.loads(contract.get_node("A"))["status"] == "PENDING"
+
+
+def test_fan_in_bound_is_enforced(direct_vm, direct_deploy):
+    contract = direct_deploy("contracts/ProofGraph.py")
+    for index in range(8):
+        create_root(contract, "P" + str(index))
+    dependencies = json.dumps(["P" + str(index) for index in range(8)])
+    contract.create_node("D", "A derived statement.", "All premises support it.", dependencies, "Evidence.")
+    with direct_vm.expect_revert("TOO_MANY_DEPENDENCIES"):
+        contract.create_node(
+            "E",
+            "Another derived statement.",
+            "All premises support it.",
+            json.dumps(["P" + str(index) for index in range(8)] + ["D"]),
+            "Evidence.",
+        )
