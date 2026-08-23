@@ -143,7 +143,7 @@ pytest tests/direct -v
 
 Direct-mode tests use GenLayer's `genlayer-test` fixtures and mock LLM outputs so the leader and validator paths can be tested independently.
 
-On Windows, `genlayer-test==0.29.2` currently fails during fixture setup because its temporary stdin file remains open when it attempts to unlink it (`PermissionError: [WinError 32]`). This is an environment/tooling failure observed in this audit, not a contract pass. Run the suite in the supported GenLayer environment after installing the pinned dependencies.
+On Windows, the committed `tests/conftest.py` contains a narrow host-only compatibility shim for a `genlayer-test==0.29.2` temporary-stdin unlink error (`PermissionError: [WinError 32]`). It affects only the test runner's loader and does not change contract execution. With that shim, the local Direct Mode suite passes 12/12 on Python 3.12.10.
 
 ## Submission fit
 

@@ -107,4 +107,4 @@ The direct test suite covers graph creation, dependency failures, positive/negat
 
 ## Evidence status
 
-The contract passes GenVM linter 0.10.0 and SDK validation. Direct-mode execution was attempted with genlayer-test 0.29.2 but is blocked on Windows by the runner's temporary-stdin unlink error (`WinError 32`); no test pass is claimed from that run. No canonical Studionet address or runtime transaction evidence is present yet; see `docs/DEPLOYMENT.md`.
+The contract passes GenVM linter 0.10.0 and SDK validation. The Direct Mode suite passes 12/12 with the committed Windows-only test-runner shim described in `tests/conftest.py`. No canonical Studionet address or runtime transaction evidence is present yet; see `docs/DEPLOYMENT.md`.
