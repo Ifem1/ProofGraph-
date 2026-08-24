@@ -1,48 +1,43 @@
 # Deployment evidence
 
-## Canonical deployment
+## Canonical Studionet deployment
 
-- Network: hosted Studionet (`https://studio.genlayer.com/api`)
-- Deployment source commit: `0cb1e396b60a0dfc9080278d091cd0c0e69a8c6a`
-- Contract: `contracts/ProofGraph.py`
-- Canonical address: [`0xAF78D769aE603b54f57413751c9111F312347A2A`](https://explorer-studio.genlayer.com/address/0xAF78D769aE603b54f57413751c9111F312347A2A)
-- Deployment transaction: [`0xe3b613830db88703b779810067d4cc2690096d1c0fc95c553a4b08a481d42474`](https://explorer-studio.genlayer.com/tx/0xe3b613830db88703b779810067d4cc2690096d1c0fc95c553a4b08a481d42474)
-- Deployment result: `MAJORITY_AGREE`
-- Deployment lifecycle: `FINALIZED` (verified with `gen_getTransactionStatus`)
-- Tooling: `genlayer-test 0.29.2`, Python 3.12.10
+- Address: `0xf41e4b81E7486E3f879A8e793d57e3301283839b`
+- Deployment transaction: `0x16c3f281a565d35d70038b884eaacae12dda6d348fb60dfef4fbceef71e5cb3`
+- Source commit: `4f232bd` (`fix: use dependency-local validity bindings`)
+- Result/lifecycle: `MAJORITY_AGREE` / `FINALIZED`
+- Tooling: Python 3.12.10, genlayer-test 0.29.2, genvm-linter 0.10.0
 
 ## Source parity
 
-Studionet `gen_getContractCode` returned the deployed source as base64. The local working-tree file uses CRLF line endings while the returned source uses LF. Raw byte digests therefore differ, but normalized UTF-8 content is identical:
+`gen_getContractCode` returned 15,062 bytes. Normalized local LF source and deployed source are identical:
 
-- Local raw SHA-256: `634611976529b0a10166c9063f70fd3fb55114900e7879c390d254f87a740650`
-- Deployed raw SHA-256: `05c3a38637d5f0f4bcaaead4dd2584462123ff54b9c5fb9eb8f79a14f8f1aa79`
-- Local normalized LF SHA-256: `05c3a38637d5f0f4bcaaead4dd2584462123ff54b9c5fb9eb8f79a14f8f1aa79`
-- Deployed normalized LF SHA-256: `05c3a38637d5f0f4bcaaead4dd2584462123ff54b9c5fb9eb8f79a14f8f1aa79`
-- Normalized content comparison: `True`
-- Final repository contract blob: `c813b2a9d012d789aa5ad39d86e267bec48dc046`
+- Local normalized SHA-256: `01d39ee2bc523bd571bb57c5495c20fb26b7690cbd0f92080b792c6b3a793545`
+- Deployed SHA-256: `01d39ee2bc523bd571bb57c5495c20fb26b7690cbd0f92080b792c6b3a793545`
+- Comparison: `True`
+- Git blob: `a17ee1ebb6a98252971e485d1571bf67b5832ad4`
 
-The contract source did not change after commit `0cb1e39`; later commits contain tests and documentation only.
+No contract-source changes followed commit `4f232bd`.
 
-## Finalized live lifecycle evidence
+## Finalized live lifecycle
 
-All receipts below were returned by the canonical live integration run and subsequently queried as `FINALIZED`.
+The Studionet integration passed (`1 passed`). Every transaction below was accepted with `MAJORITY_AGREE` and confirmed `FINALIZED` via `gen_getTransactionStatus`.
 
-| Flow | Transaction | Result / observed state |
+| Flow | Transaction | Observed result |
 |---|---|---|
-| Deploy | `0xe3b613830db88703b779810067d4cc2690096d1c0fc95c553a4b08a481d42474` | `MAJORITY_AGREE`, `FINALIZED` |
-| Create root A | `0x3a0220dfe261ca947c2e9bed11aa029c86fee89321f3e85b45aef799bb7a15d3` | `MAJORITY_AGREE`, `FINALIZED` |
-| Resolve A | `0x57c715d0692a305dc209e413fd80f075ab1f6365d3a7b15159f5992a94cdbbb9` | `A.status = VALID`, `MAJORITY_AGREE`, `FINALIZED` |
-| Create B -> A | `0xff965b7506858e4b09a9155ac619cd05848920cf0cfa9d671ed2445e13015f42` | `MAJORITY_AGREE`, `FINALIZED` |
-| Resolve B | `0x5e28d70318e189d092aaf49d22d607d356e75a57555c32eead29225b9fc163d8` | `B.status = VALID`, `MAJORITY_AGREE`, `FINALIZED` |
-| Create C -> B | `0x3675f7e548df114a315bf9199b63c43b5ba158d87492df22e5c3ec61b2f4d3a3` | `MAJORITY_AGREE`, `FINALIZED` |
-| Resolve C | `0x9a078fbb391a34e39994f5f41ec474e7c92376484ef4748dcfcd11d2781a61a5` | `C.status = VALID`, `MAJORITY_AGREE`, `FINALIZED` |
-| Re-resolve A | `0x3b9313f2e2d999deaaf98a1603bb3c1a50c1fe78a61df1bf2a7664038a6dfd64` | epoch advanced; `is_valid(B/C)=false`, `can_consume(B/C)=false` |
-| Recover B | `0xd32f95b1ab326b8c852cfd5524e7924b0c73bcfa91b92abaef08a1cf24866ce7` | `B` recovered, `MAJORITY_AGREE`, `FINALIZED` |
-| Recover C | `0x986cd478d74bc5f53f2915a310aff26661ad7bbdb1db2814c5d3c25da9849931` | `C.status = VALID`, `MAJORITY_AGREE`, `FINALIZED` |
-| Create negative N | `0x94a86c34f260781ab94326a825c538ddd22142938c4b94ce4d34aa16f5729016` | `MAJORITY_AGREE`, `FINALIZED` |
-| Resolve negative N | `0x9784660d17c98a00ed76bde046878eff841977c14f27e1ed6f5ec38774445c36` | `N.status` was `INVALID` or `PENDING` under semantic consensus; `FINALIZED` |
+| Deploy | `0x16c3f281a565d35d70038b884eaacae12dda6d348fb60dfef4fbceef71e5cb3` | finalized |
+| Create A | `0x99fe51daa576e887f2e10850ba120fc52355c0a93d5f8606089b0e2886680114` | finalized |
+| Resolve A | `0x8ecf26776628b6ccaab30637ec78e867ab3f4df944e478153f0608ff6c3dfb41` | A `VALID`, finalized |
+| Create B -> A | `0x37db4a7614e9453b02386201bea6e5c980dc42edd54ffe021e8360feb53dbbfd` | finalized |
+| Resolve B | `0x67d477a8f1446fa13d00d5d44b9fb1d0a995caef01eb3948b2e87aebac7fbef4` | B `VALID`, finalized |
+| Create C -> B | `0x702bd249f426c79425fdd47ee32a42773beb4ff3da3fb5e451580c8b1797ccb6` | finalized |
+| Resolve C | `0xa7d5547fc0f287a01cf815b3ede18964e1e764dc2d8dd30fd39427e0915c5549` | C `VALID`, finalized |
+| Re-resolve A | `0x58c9c0f0e369ca4621cd97478e11c90285c60fa456d6174172511897dade3e25` | B/C `is_valid=false`, finalized |
+| Recover B | `0xaaf603576f7782b8c358b65589dc3eb4e748da311b5d2a0cd932835a2e248c37` | B recovered, finalized |
+| Recover C | `0x736080112923f9f36642540b4dd2ffa2455919ab4452623d73817ced84ff14f` | C `VALID`, finalized |
+| Create negative N | `0x8803a3ae27843e1cde4039f0aebfc2467898878d0cd61c847b7e6b3c1591c92b` | finalized |
+| Resolve negative N | `0x3b85a785efc9de5f436840bcd1c28cdcf1dcb4da2599f4022afdd8926f6fd404` | majority agree, one disagree, finalized |
 
-Consensus observations included `MAJORITY_AGREE` receipts with validator votes such as `AGREE` and `IDLE`. The negative resolution also exposed one `DISAGREE` vote while still reaching `MAJORITY_AGREE`; no leader-only result was accepted.
+## Deprecated deployment
 
-The committed live test is `tests/integration/test_proofgraph_studionet.py`. It uses disposable state within the canonical deployment and asserts positive root/derivation, three-level stale reads, recovery, and negative semantic handling.
+`0xAF78D769aE603b54f57413751c9111F312347A2A` (deployment `0xe3b613830db88703b779810067d4cc2690096d1c0fc95c553a4b08a481d42474`) is audit history only. It used the superseded contract-wide validity-epoch design and is not canonical.

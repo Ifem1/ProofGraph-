@@ -36,7 +36,7 @@ The contract handles the following without LLM judgment:
 - parent validity gating
 - node state transitions after consensus
 - direct dependent invalidation
-- parent revision bindings and bounded validity epochs
+- parent revision bindings and bounded dependency-local ancestor validation
 - consumption checks
 
 No persistent state is written from inside a non-deterministic block.
@@ -71,7 +71,7 @@ Why: an attacker could otherwise build a very large descendant tree and make one
 
 ### Effective validity and stale descendants
 
-Stored `VALID` is not sufficient for consumption. Each resolved node records its direct parent revisions and the current validity epoch. Re-resolving an effectively valid node advances the epoch; this is bounded state, not recursive graph mutation. `is_valid` and `can_consume` require the node's epoch and every direct parent's status, revision, and epoch binding to match. A stale parent therefore makes deeper descendants fail closed immediately. Recovery requires explicit re-resolution from the changed parent downward.
+Stored `VALID` is not sufficient for consumption. Each resolved node records its direct parent revisions and a creation-time depth bounded by `MAX_DEPTH=16`. `is_valid` and `can_consume` walk only that node's recorded ancestor bindings and fail closed on any missing, non-VALID, or revision-mismatched ancestor. Re-resolving one branch cannot invalidate unrelated branches; recovery requires explicit re-resolution from the changed parent downward.
 
 ## 7. Revision semantics
 

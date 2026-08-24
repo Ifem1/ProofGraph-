@@ -107,4 +107,4 @@ The direct test suite covers graph creation, dependency failures, positive/negat
 
 ## Evidence status
 
-The contract passes GenVM linter 0.10.0 and SDK validation. The Direct Mode suite passes 18/18 with the committed Windows-only test-runner shim described in `tests/conftest.py`. The canonical Studionet deployment and finalized lifecycle evidence are recorded in `docs/DEPLOYMENT.md`.
+The contract passes GenVM linter 0.10.0 and SDK validation. The Direct Mode suite passes 20/20 (one live test is opt-in) with the committed Windows-only test-runner shim described in `tests/conftest.py`. The canonical Studionet deployment at `0xf41e4b81E7486E3f879A8e793d57e3301283839b`, its finalized lifecycle, and normalized source parity are recorded in `docs/DEPLOYMENT.md`.

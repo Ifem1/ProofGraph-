@@ -91,7 +91,7 @@ def test_live_proofgraph_lifecycle():
     _receipt("RESOLVE_C", contract.resolve_node(args=["C", ""]).transact())
     assert contract.is_valid(args=["C"]).call() is True
 
-    # Re-adjudicating A advances the validity epoch. B and C must fail closed
+    # Re-adjudicating A changes only A's dependency-local revision binding. B and C fail closed
     # immediately, without either child being explicitly resolved first.
     _receipt("REVISE_A", contract.resolve_node(args=["A", "revalidation"]).transact())
     assert contract.is_valid(args=["B"]).call() is False
