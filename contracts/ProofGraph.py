@@ -11,11 +11,10 @@ class ProofGraph(gl.Contract):
     nodes: TreeMap[str, str]
     dependents: TreeMap[str, str]
     node_count: u64
-    validity_epoch: u64
+    MAX_DEPTH = 16
 
     def __init__(self):
         self.node_count = u64(0)
-        self.validity_epoch = u64(0)
 
     def _spec_hash(self, node: dict) -> str:
         specification = json.dumps(
@@ -117,14 +116,19 @@ class ProofGraph(gl.Contract):
 
         # A node may only point to already-existing nodes. Because IDs are immutable,
         # every edge points backward in creation order and the graph is a DAG.
+        depth = 0
         for dependency in dependencies:
             if self.nodes.get(dependency, "") == "":
                 raise gl.vm.UserError("DEPENDENCY_NOT_FOUND")
+            parent = self._load_node(dependency)
+            depth = max(depth, int(parent.get("depth", 0)) + 1)
             children = self._load_string_array(self.dependents.get(dependency, "[]"))
             if len(children) >= 32:
                 raise gl.vm.UserError("DEPENDENT_LIMIT_REACHED")
             children.append(node_id)
             self.dependents[dependency] = self._store_string_array(children)
+        if depth > self.MAX_DEPTH:
+            raise gl.vm.UserError("MAX_DEPTH_EXCEEDED")
 
         node = {
             "id": node_id,
@@ -138,7 +142,7 @@ class ProofGraph(gl.Contract):
             "blocker_class": "NONE",
             "reason": "Awaiting GenLayer consensus.",
             "revision": 0,
-            "resolved_epoch": 0,
+            "depth": depth,
             "resolved_parent_revisions": {},
             "spec_hash": "",
             "adjudication_input_hash": "",
@@ -156,10 +160,6 @@ class ProofGraph(gl.Contract):
 
         node = self._load_node(node_id)
         previous_status = node["status"]
-        previous_effective_valid = self._is_effectively_valid(node)
-        if previous_effective_valid:
-            self.validity_epoch = u64(self.validity_epoch + 1)
-        current_epoch = int(self.validity_epoch)
         dependencies = node["dependencies"]
         parent_summaries: list[dict] = []
         parent_revisions: dict[str, int] = {}
@@ -182,7 +182,6 @@ class ProofGraph(gl.Contract):
 
         node["revision"] = int(node["revision"]) + 1
         node["last_context"] = context.strip()
-        node["resolved_epoch"] = 0
         node["resolved_parent_revisions"] = parent_revisions
 
         # A derived conclusion cannot be valid while one of its declared premises is not.
@@ -290,8 +289,6 @@ INPUT:
             adjudication_input.encode()
         ).hexdigest()
         node["spec_hash"] = self._spec_hash(node)
-        node["resolved_epoch"] = current_epoch
-
         node["verdict"] = result["verdict"]
         node["rule_satisfied"] = result["rule_satisfied"]
         node["blocker_class"] = result["blocker_class"]
@@ -316,25 +313,24 @@ INPUT:
         return raw
 
     def _is_effectively_valid(self, node: dict) -> bool:
-        if node["status"] != "VALID":
-            return False
-        if int(node.get("resolved_epoch", 0)) != int(self.validity_epoch):
-            return False
-        for dependency in node["dependencies"]:
-            parent_raw = self.nodes.get(dependency, "")
-            if parent_raw == "":
+        # Validate only this node's recorded parent revisions and their ancestors.
+        # The persisted depth makes this traversal deterministic and bounded.
+        stack: list[tuple[dict, int]] = [(node, 0)]
+        while stack:
+            current, distance = stack.pop()
+            if current["status"] != "VALID" or distance > self.MAX_DEPTH:
                 return False
-            parent = json.loads(parent_raw)
-            if not self._is_directly_bound(parent, int(node["resolved_parent_revisions"].get(dependency, -1))):
-                return False
+            bindings = current.get("resolved_parent_revisions", {})
+            for dependency in current["dependencies"]:
+                parent_raw = self.nodes.get(dependency, "")
+                if parent_raw == "":
+                    return False
+                parent = json.loads(parent_raw)
+                expected_revision = bindings.get(dependency, -1)
+                if int(parent["revision"]) != int(expected_revision):
+                    return False
+                stack.append((parent, distance + 1))
         return True
-
-    def _is_directly_bound(self, parent: dict, expected_revision: int) -> bool:
-        return (
-            parent["status"] == "VALID"
-            and int(parent["revision"]) == expected_revision
-            and int(parent.get("resolved_epoch", 0)) == int(self.validity_epoch)
-        )
 
     @gl.public.view
     def get_dependents(self, node_id: str) -> str:
@@ -367,6 +363,6 @@ INPUT:
     @gl.public.view
     def get_graph_stats(self) -> str:
         return json.dumps(
-            {"node_count": int(self.node_count), "validity_epoch": int(self.validity_epoch)},
+            {"node_count": int(self.node_count), "max_depth": self.MAX_DEPTH},
             separators=(",", ":"),
         )

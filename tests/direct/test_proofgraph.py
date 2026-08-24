@@ -242,7 +242,8 @@ def test_revision_binding_and_context_not_semantic_input(direct_vm, direct_deplo
     first = json.loads(contract.get_node("A"))
     assert first["spec_hash"] != ""
     assert first["adjudication_input_hash"] != ""
-    assert first["resolved_epoch"] == 0
+    assert "resolved_epoch" not in first
+    assert first["depth"] == 0
 
     direct_vm.clear_mocks()
     direct_vm.mock_llm(r".*dependency-aware proof graph.*", supported("second"))
@@ -251,6 +252,49 @@ def test_revision_binding_and_context_not_semantic_input(direct_vm, direct_deplo
     assert second["spec_hash"] == first["spec_hash"]
     assert second["adjudication_input_hash"] == first["adjudication_input_hash"]
     assert second["revision"] == 2
+
+
+def test_dependency_local_isolation_and_middle_reresolution(direct_vm, direct_deploy):
+    contract = direct_deploy("contracts/ProofGraph.py")
+    for root in ("A", "X"):
+        create_root(contract, root)
+    contract.create_node("B", "B is supported.", "A must support B.", '["A"]', "B evidence.")
+    contract.create_node("C", "C is supported.", "B must support C.", '["B"]', "C evidence.")
+    contract.create_node("Y", "Y is supported.", "X must support Y.", '["X"]', "Y evidence.")
+    contract.create_node("Z", "Z is supported.", "Y must support Z.", '["Y"]', "Z evidence.")
+
+    direct_vm.mock_llm(r".*dependency-aware proof graph.*", supported())
+    for node_id in ("A", "X", "B", "C", "Y", "Z"):
+        contract.resolve_node(node_id, "")
+    assert all(contract.is_valid(node_id) for node_id in ("A", "B", "C", "X", "Y", "Z"))
+
+    # Re-resolving A changes only A's revision binding chain.
+    contract.resolve_node("A", "new A evidence")
+    assert not contract.is_valid("B")
+    assert not contract.is_valid("C")
+    assert contract.is_valid("X")
+    assert contract.is_valid("Y") and contract.can_consume("Y", 1)
+    assert contract.is_valid("Z") and contract.can_consume("Z", 1)
+
+    # Re-resolving B with unchanged A preserves A/B and invalidates only C.
+    contract.resolve_node("B", "new B evidence")
+    assert contract.is_valid("A") and contract.is_valid("B")
+    assert not contract.is_valid("C")
+    contract.resolve_node("C", "new C evidence")
+    assert contract.is_valid("C")
+
+
+def test_max_depth_is_bounded(direct_vm, direct_deploy):
+    contract = direct_deploy("contracts/ProofGraph.py")
+    create_root(contract, "N0")
+    for index in range(1, 17):
+        parent = "N" + str(index - 1)
+        node = "N" + str(index)
+        contract.create_node(node, node + " is supported.", parent + " must support it.",
+                             '["' + parent + '"]', node + " evidence.")
+    with direct_vm.expect_revert("MAX_DEPTH_EXCEEDED"):
+        contract.create_node("N17", "N17 is supported.", "N16 must support it.",
+                             '["N16"]', "N17 evidence.")
 
 
 def test_validator_compares_semantic_decision_fields(direct_vm, direct_deploy):
