@@ -75,7 +75,7 @@ Stored `VALID` is not sufficient for consumption. Each resolved node records its
 
 ## 7. Revision semantics
 
-Every call to `resolve_node` increments the node revision, including deterministic dependency-blocked resolutions. Consumers may call:
+Materially new adjudications increment the node revision, including deterministic dependency-blocked resolutions. Repeating an unchanged canonical adjudication preserves the existing revision and parent bindings. Consumers may call:
 
 ```python
 can_consume(node_id, minimum_revision)

@@ -103,8 +103,8 @@ genvm-lint check contracts/ProofGraph.py
 pytest tests/direct -v
 ```
 
-The direct test suite covers graph creation, dependency failures, positive/negative/indeterminate semantic outcomes, stale propagation, revision-gated consumption, and validator agreement/disagreement behavior.
+The direct test suite covers graph creation, dependency failures, positive/negative/indeterminate semantic outcomes, stale propagation, revision-gated consumption, idempotent no-op re-resolution, and validator agreement/disagreement behavior.
 
 ## Evidence status
 
-The contract passes GenVM linter 0.10.0 and SDK validation. The Direct Mode suite passes 20/20 (one live test is opt-in) with the committed Windows-only test-runner shim described in `tests/conftest.py`. The canonical Studionet deployment at `0xf41e4b81E7486E3f879A8e793d57e3301283839b`, its finalized lifecycle, and normalized source parity are recorded in `docs/DEPLOYMENT.md`.
+The contract passes GenVM linter 0.10.0 and SDK validation. The Direct Mode suite passes 21/21 (one live test is opt-in) with the committed Windows-only test-runner shim described in `tests/conftest.py`. The canonical Studionet deployment at `0xa06e0035BbC8b0f2Eb4A0F7Ca0F4b3d266209DfB`, its finalized lifecycle, and normalized source parity are recorded in `docs/DEPLOYMENT.md`.

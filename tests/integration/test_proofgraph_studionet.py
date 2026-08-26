@@ -91,16 +91,13 @@ def test_live_proofgraph_lifecycle():
     _receipt("RESOLVE_C", contract.resolve_node(args=["C", ""]).transact())
     assert contract.is_valid(args=["C"]).call() is True
 
-    # Re-adjudicating A changes only A's dependency-local revision binding. B and C fail closed
-    # immediately, without either child being explicitly resolved first.
+    # Re-adjudicating A with context only is a semantic no-op. Its revision
+    # binding is preserved, so arbitrary callers cannot invalidate B or C.
     _receipt("REVISE_A", contract.resolve_node(args=["A", "revalidation"]).transact())
-    assert contract.is_valid(args=["B"]).call() is False
-    assert contract.is_valid(args=["C"]).call() is False
-    assert contract.can_consume(args=["B", 1]).call() is False
-    assert contract.can_consume(args=["C", 1]).call() is False
-
-    _receipt("RECOVER_B", contract.resolve_node(args=["B", ""]).transact())
-    _receipt("RECOVER_C", contract.resolve_node(args=["C", ""]).transact())
+    assert contract.is_valid(args=["B"]).call() is True
+    assert contract.is_valid(args=["C"]).call() is True
+    assert contract.can_consume(args=["B", 1]).call() is True
+    assert contract.can_consume(args=["C", 1]).call() is True
     assert contract.is_valid(args=["C"]).call() is True
 
     _receipt(
