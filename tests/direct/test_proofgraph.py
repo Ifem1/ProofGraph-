@@ -251,7 +251,27 @@ def test_revision_binding_and_context_not_semantic_input(direct_vm, direct_deplo
     second = json.loads(contract.get_node("A"))
     assert second["spec_hash"] == first["spec_hash"]
     assert second["adjudication_input_hash"] == first["adjudication_input_hash"]
-    assert second["revision"] == 2
+    assert second["revision"] == 1
+
+
+def test_noop_reresolution_preserves_revision_and_descendant(direct_vm, direct_deploy):
+    contract = direct_deploy("contracts/ProofGraph.py")
+    create_root(contract)
+    contract.create_node("B", "B is supported.", "A must support B.", '["A"]', "B evidence.")
+    direct_vm.mock_llm(r".*dependency-aware proof graph.*", supported())
+    contract.resolve_node("A", "initial context")
+    contract.resolve_node("B", "")
+    first = json.loads(contract.get_node("A"))
+    assert contract.is_valid("B") is True
+
+    # Same immutable semantic input and same decision: audit context changes,
+    # but the revision and downstream binding remain stable.
+    contract.resolve_node("A", "arbitrary repeated context")
+    second = json.loads(contract.get_node("A"))
+    assert second["revision"] == first["revision"]
+    assert second["adjudication_input_hash"] == first["adjudication_input_hash"]
+    assert contract.is_valid("B") is True
+    assert contract.can_consume("B", 1) is True
 
 
 def test_dependency_local_isolation_and_middle_reresolution(direct_vm, direct_deploy):
@@ -268,7 +288,9 @@ def test_dependency_local_isolation_and_middle_reresolution(direct_vm, direct_de
         contract.resolve_node(node_id, "")
     assert all(contract.is_valid(node_id) for node_id in ("A", "B", "C", "X", "Y", "Z"))
 
-    # Re-resolving A changes only A's revision binding chain.
+    # A materially changed adjudication changes only A's revision binding chain.
+    direct_vm.clear_mocks()
+    direct_vm.mock_llm(r".*dependency-aware proof graph.*", not_supported("EVIDENCE"))
     contract.resolve_node("A", "new A evidence")
     assert not contract.is_valid("B")
     assert not contract.is_valid("C")
@@ -276,7 +298,10 @@ def test_dependency_local_isolation_and_middle_reresolution(direct_vm, direct_de
     assert contract.is_valid("Y") and contract.can_consume("Y", 1)
     assert contract.is_valid("Z") and contract.can_consume("Z", 1)
 
-    # Re-resolving B with unchanged A preserves A/B and invalidates only C.
+    # Recover A first; then re-resolving B with unchanged A preserves A/B and invalidates only C.
+    direct_vm.clear_mocks()
+    direct_vm.mock_llm(r".*dependency-aware proof graph.*", supported())
+    contract.resolve_node("A", "recovered A")
     contract.resolve_node("B", "new B evidence")
     assert contract.is_valid("A") and contract.is_valid("B")
     assert not contract.is_valid("C")

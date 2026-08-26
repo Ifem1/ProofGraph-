@@ -160,6 +160,14 @@ class ProofGraph(gl.Contract):
 
         node = self._load_node(node_id)
         previous_status = node["status"]
+        previous_revision = int(node["revision"])
+        previous_input_hash = node.get("adjudication_input_hash", "")
+        previous_decision = {
+            "verdict": node.get("verdict"),
+            "rule_satisfied": node.get("rule_satisfied"),
+            "blocker_class": node.get("blocker_class"),
+            "reason": node.get("reason"),
+        }
         dependencies = node["dependencies"]
         parent_summaries: list[dict] = []
         parent_revisions: dict[str, int] = {}
@@ -285,9 +293,8 @@ INPUT:
 
         result = gl.vm.run_nondet_unsafe(evaluate, validator_fn)
 
-        node["adjudication_input_hash"] = hashlib.sha256(
-            adjudication_input.encode()
-        ).hexdigest()
+        adjudication_input_hash = hashlib.sha256(adjudication_input.encode()).hexdigest()
+        node["adjudication_input_hash"] = adjudication_input_hash
         node["spec_hash"] = self._spec_hash(node)
         node["verdict"] = result["verdict"]
         node["rule_satisfied"] = result["rule_satisfied"]
@@ -299,6 +306,23 @@ INPUT:
             node["status"] = "INVALID"
         else:
             node["status"] = "PENDING"
+
+        # Context is audit metadata and is intentionally excluded from the
+        # semantic input. A caller repeating the same adjudication must not
+        # churn the revision or invalidate unchanged downstream bindings.
+        unchanged_adjudication = (
+            previous_input_hash != ""
+            and previous_input_hash == adjudication_input_hash
+            and previous_decision["verdict"] == node["verdict"]
+            and previous_decision["rule_satisfied"] == node["rule_satisfied"]
+            and previous_decision["blocker_class"] == node["blocker_class"]
+            and previous_status == node["status"]
+        )
+        if unchanged_adjudication:
+            node["revision"] = previous_revision
+            node["resolved_parent_revisions"] = json.loads(
+                json.dumps(self._load_node(node_id).get("resolved_parent_revisions", {}))
+            )
 
         self._store_node(node_id, node)
 
